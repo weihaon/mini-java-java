@@ -2,7 +2,7 @@
 
 **Mini Java**
 
-The goal is to build a compiler for a tiny fragment of the Java language, called Mini Java, to x86-64 assembly.All the details are given in the** **[project statement](https://www.enseignement.polytechnique.fr/informatique/CSC_52064/projet/mini-java-v2.pdf).
+The goal is to build a compiler for a tiny fragment of the Java language, called Mini Java, to x86-64 assembly.All the details are given in the [project statement](https://www.enseignement.polytechnique.fr/informatique/CSC_52064/projet/mini-java-v2.pdf).
 
  You must submit an tarball containing
 
