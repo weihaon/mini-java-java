@@ -1,0 +1,768 @@
+package mini_java;
+//导入map
+import java.util.*;
+//导入list
+//导入stack
+//导入hashmap
+//导入arraylist
+
+
+
+
+// Symbol.java
+class Symbol_ {
+  String name;
+  Location loc;  // 源代码位置，用于错误报告
+
+
+  Symbol_(String name, Location loc) {
+    this.name = name;
+    this.loc = loc;
+  }
+
+}
+class DeclSymbol extends Symbol_{
+  PType type;
+
+  DeclSymbol(String name, PType type, Location loc){
+    super(name,loc);
+    this.type = type;
+  }
+  DeclSymbol(String name, Location loc){//考虑构造函数
+    super(name,loc);
+  }
+
+}
+class methodSymbol extends Symbol_{
+  List<DeclSymbol> parameters = new ArrayList<>();  // 参数列表
+  Map<String, DeclSymbol> locals = new HashMap<>();         // 局部变量表,
+  PType returnType;                                      // 返回类型
+  ClassSymbol owner;
+  PStmt body;
+  methodSymbol(String name, PType returnType, Location loc, ClassSymbol owner){
+    super(name,loc);
+    this.returnType = returnType;
+    this.owner = owner;
+  }
+
+
+}
+
+class ClassSymbol extends Symbol_ {
+  Map<String, DeclSymbol> fields = new HashMap<>();
+  Map<String, methodSymbol> methods = new HashMap<>();//可能是构造函数或者方法
+  methodSymbol constructor;
+  ClassSymbol parent;
+
+  ClassSymbol(Location loc, PClass Class) {
+    super(Class.name.id,  loc);
+  }
+  void AddParent(ClassSymbol parent){
+    this.parent = parent;
+  }
+  boolean CheckReapeat(String name){
+    if(fields.containsKey(name) || methods.containsKey(name)){
+      //TODO 报错 不能重复定义
+      return true;
+    } else if (parent.name.equals(name)){
+      //TODO 报错 不能和构造函数重名
+      return true;
+
+    } else {
+      return false;
+    }
+  }
+  boolean isSubclass(ClassSymbol c){
+    //判断是否是自己是不是c的子类
+    if(this == c){
+      return true;
+    }
+    if(parent == null){
+      return false;
+    }
+    return parent.isSubclass(c);
+  }
+  void AddSym(PDecl D){//可能加入的是方法或者变量
+    if (D instanceof PDattribute SpecificD) {
+      DeclSymbol symbol=new DeclSymbol(SpecificD.x.id, SpecificD.ty, SpecificD.x.loc);
+      fields.put(SpecificD.x.id,symbol);
+      //TODO 考虑重复定义成员
+
+    } else if (D instanceof PDmethod SpecificD) {
+      methodSymbol symbol=new methodSymbol(SpecificD.x.id, SpecificD.ty,SpecificD.x.loc,this);
+        methods.put(SpecificD.x.id,symbol);
+        //TODO 考虑重复定义函数
+    } else if (D instanceof PDconstructor SpecificD) {
+      methodSymbol symbol=new methodSymbol(SpecificD.x.id, null,SpecificD.x.loc,this);
+      if(constructor == null) {
+        constructor = symbol;
+      }
+      else{
+        //TODO 报错 不能定义两个构造函数
+      }
+    } else {
+      //TODO 报错 不能定义这种类型
+    }
+  }
+
+
+  // 查找字段（包括父类）
+  DeclSymbol lookupField(String name) {
+    DeclSymbol field = fields.get(name);
+    if (field != null) return field;
+    if (parent != null) return parent.lookupField(name);
+    return null;
+  }
+
+  // 查找方法（包括父类）
+  methodSymbol lookupMethod(String name) {
+    methodSymbol method = methods.get(name);
+    if (method != null) return method;
+    if (parent != null) return parent.lookupMethod(name);
+    return null;
+  }
+}
+
+// SymbolTable.java
+class SymbolTable {
+  Map<String, TDClass> classes = new HashMap<>();
+  Stack<Map<String, TDattribute>> scopes = new Stack<>();//作用域栈,保存当前作用域的符号
+  TDClass currentClass;
+  TDecl currentMethod;
+
+
+  // 进入新作用域
+  void enterScope() {
+    scopes.push(new HashMap<>());
+  }
+
+  // 退出当前作用域
+  void exitScope() {
+    scopes.pop();
+  }
+  void define(PDattribute D) {
+    if (scopes.isEmpty()) {
+      //TODO报错 不能有全局变量
+    } else {
+      Map<String, TDattribute> currentScope = scopes.peek();
+      //TODO检查是否重复定义
+      D.ty.accept(pt);
+      TDattribute NewAttribute=new TDattribute(pt.currentType,D.x);
+      currentScope.put(D.x.id, NewAttribute);
+      }
+    }
+  // 在当前作用域中定义新符号
+  void define(PClass c) {
+    if (scopes.isEmpty()) {
+        TDClass sym = new TDClass(, c);
+        classes.put(c.name.id, sym);//新加入一个类
+
+      //TODO 考虑类不能被定义两次
+    } else {
+      //TODO 报错 不能在类中定义类
+    }
+  }
+
+  // 查找符号（考虑作用域层次）
+  Symbol_ lookup(String name) {//可能是类可能是方法可能是变量
+    // 从内向外查找各个作用域
+    for (int i = scopes.size() - 1; i >= 0; i--) {
+      DeclSymbol sym = scopes.get(i).get(name);
+      if (sym != null) return sym;
+    }
+
+    // 如果在局部作用域中没找到，检查当前类的字段
+    if (currentClass != null) {
+      DeclSymbol field = currentClass.lookupField(name);
+      if (field != null) return field;
+    }
+
+    // 最后检查是否是类名
+    return classes.get(name);
+  }
+
+  void setCurrentClass(ClassSymbol c) {
+    this.currentClass = c;
+  }
+
+  void setCurrentMethod(methodSymbol m) {
+    this.currentMethod = m;
+  }
+
+  ClassSymbol getCurrentClass() {
+    return currentClass;
+  }
+
+  methodSymbol getCurrentMethod() {
+    return currentMethod;
+  }
+
+
+}
+
+class Typing {
+
+  static boolean debug = false;
+
+  // use this method to signal typing errors
+  static void error(Location loc, String msg) {
+    String l = loc == null ? " <no location>" : " " + loc;
+    throw new Error(l + "\nerror: " + msg);
+
+  }
+  static void CreateMember(SymbolTable symtab, PClass f, ClassSymbol current) {
+    for (PDecl d : f.l) {
+      current.AddSym(d);
+        if(d instanceof PDconstructor SpecificD) {
+          methodSymbol m = current.constructor;
+          for(PParam p : SpecificD.l){
+            DeclSymbol symbol = new DeclSymbol(p.x.id, p.ty, p.x.loc);
+            m.parameters.add(symbol);
+          }
+        }
+      if(d instanceof PDmethod SpecificD ) {
+          methodSymbol m = current.methods.get(SpecificD.x.id);
+
+          for(PParam p : SpecificD.l){
+            DeclSymbol symbol = new DeclSymbol(p.x.id, p.ty, p.x.loc);
+            m.parameters.add(symbol);
+          }
+          m.body = SpecificD.s;
+        }
+    }
+  }
+    // 处理表达式
+    private static void processExpression(PExpr expr, SymbolTable table) {
+      if (expr instanceof PEcst) {
+        // 常量不需要特殊处理
+      }
+      else if (expr instanceof PEbinop) {
+        PEbinop binop = (PEbinop) expr;
+        processExpression(binop.e1, table);
+        processExpression(binop.e2, table);
+      }
+      else if (expr instanceof PEunop) {
+        PEunop unop = (PEunop) expr;
+        processExpression(unop.e, table);
+      }
+      else if (expr instanceof PEthis) {
+        // this 关键字不需要特殊处理
+      }
+      else if (expr instanceof PEnull) {
+        // null 不需要特殊处理
+      }
+      else if (expr instanceof PEident) {
+        // 处理标识符引用
+        PEident ident = (PEident) expr;
+        if (table.lookup(ident.id.id) == null) {
+          //TODO引用不存在的变量(右边)
+        }
+      }
+      else if (expr instanceof PEdot) {
+        // 处理成员访问
+        PEdot dot = (PEdot) expr;
+        processExpression(dot.e, table);
+      }
+      else if (expr instanceof PEassignIdent) {
+        // 处理标识符赋值
+        PEassignIdent assign = (PEassignIdent) expr;
+        if (table.lookup(assign.id.id) == null) {
+          //TODO引用不存在的变量(左边)
+        }
+        processExpression(assign.e, table);
+      }
+      else if (expr instanceof PEassignDot) {
+        // 处理成员赋值
+        PEassignDot assign = (PEassignDot) expr;
+        processExpression(assign.e1, table);
+        processExpression(assign.e2, table);
+      }
+      else if (expr instanceof PEnew) {
+        // 处理new表达式
+        PEnew newExpr = (PEnew) expr;
+        ClassSymbol cls = (ClassSymbol)table.classes.get(newExpr.c.id);
+        if (cls == null) {
+            //TODO引用不存在的类
+        }
+        // 处理构造函数参数
+        for (PExpr arg : newExpr.l) {
+          processExpression(arg, table);
+        }
+      }
+      else if (expr instanceof PEcall) {
+        // 处理方法调用
+        PEcall call = (PEcall) expr;
+        processExpression(call.e,table);  // 处理调用对象
+        for (PExpr arg : call.l) {
+          processExpression(arg,table);
+        }
+      }
+      else if (expr instanceof PEcast) {
+        // 处理类型转换
+        PEcast cast = (PEcast) expr;
+        processExpression(cast.e, table);//类型转换
+      }
+      else if (expr instanceof PEinstanceof) {
+        // 处理instanceof表达式
+        PEinstanceof instanceof_ = (PEinstanceof) expr;
+        processExpression(instanceof_.e, table);
+      }
+    }
+    // 收集局部变量
+    private static void collectLocals(PStmt stmt, SymbolTable table) {
+      if (stmt instanceof PSblock) {
+        PSblock block = (PSblock) stmt;
+        table.enterScope();
+        for (PStmt s : block.l) {  // 使用 l 而不是 statements
+          collectLocals(s, table);
+        }
+        table.exitScope();
+      }
+      else if (stmt instanceof PSvar) {
+        PSvar varDecl = (PSvar) stmt;
+        DeclSymbol local = new DeclSymbol(varDecl.x.id, varDecl.ty, varDecl.x.loc);
+        table.define(local);
+        // 如果有初始化表达式，处理它
+        if (varDecl.e != null) {
+          processExpression(varDecl.e, table);
+          typeCheck(varDecl.e, table);
+
+
+        }
+      }
+      else if (stmt instanceof PSif) {
+        PSif ifStmt = (PSif) stmt;
+        processExpression(ifStmt.e, table);
+        Constant r=typeCheck(ifStmt.e, table);
+        if(!(r instanceof Cbool)){
+          //TODO报错
+        }
+
+        collectLocals(ifStmt.s1, table);
+        if (ifStmt.s2 != null) {
+          collectLocals(ifStmt.s2, table);
+        }
+      }
+      else if (stmt instanceof PSfor) {
+        PSfor forStmt = (PSfor) stmt;
+        // 处理初始化语句
+        if (forStmt.s1 != null) {
+          collectLocals(forStmt.s1, table);
+        }
+        // 处理条件表达式
+        if (forStmt.e != null) {
+          processExpression(forStmt.e, table);
+          Constant r= typeCheck(forStmt.e, table);//判断是否是bool类型
+          if(!(r instanceof Cbool)){
+            //TODO报错
+          }
+
+        }
+        // 处理迭代语句
+        if (forStmt.s2 != null) {
+          collectLocals(forStmt.s2, table);
+        }
+        // 处理循环体
+        if (forStmt.s3 != null) {
+          collectLocals(forStmt.s3, table);
+        }
+      }
+      else if (stmt instanceof PSreturn) {
+        PSreturn returnStmt = (PSreturn) stmt;
+        if (returnStmt.e != null) {
+          processExpression(returnStmt.e, table);
+          Constant r= typeCheck(returnStmt.e, table);
+            if((r instanceof Cclass) && table.getCurrentMethod().returnType instanceof PTident){//返回类型是类
+              ClassSymbol cls = table.classes.get(((Cclass)r).name);
+              ClassSymbol m= table.classes.get(((PTident)table.getCurrentMethod().returnType).x.id);
+              //cls应该是m的子类
+              if(!cls.isSubclass(m)){
+                //TODO报错 返回参数错误
+              }
+            }
+            else if(!(r instanceof Cclass)) {
+                Constant m=TypeTranConsant(table.getCurrentMethod().returnType);
+                if(m.getClass()!=r.getClass()){
+                  //TODO报错 返回类型不一致
+                }
+            }
+        }
+      }
+      else if (stmt instanceof PSexpr) {
+        PSexpr exprStmt = (PSexpr) stmt;
+        processExpression(exprStmt.e, table);
+        typeCheck(exprStmt.e, table);
+      }
+    }
+
+  // 处理表达式
+
+  // 检查循环继承
+  private static void checkCyclicInheritance(ClassSymbol cls) {
+    Set<ClassSymbol> visited = new HashSet<>();
+    ClassSymbol current = cls;
+
+    while (current != null) {
+      if (!visited.add(current)) {
+        // TODO如果无法添加到visited集合，说明遇到了循环继承
+      }
+      current = current.parent;
+    }
+  }
+  static void ClassCheck(SymbolTable symtab, PFile f) {
+    //收集类,遍历f.l
+    for (PClass c : f.l) {
+      //创建类符号
+      symtab.define(c);// 创建类
+    }
+    for (PClass c : f.l) {//执行继承
+      //创建类符号
+      String name = c.name.id;
+      String parentName = c.ext.id ;
+      if(parentName != null){
+        //找父类
+        ClassSymbol parent = symtab.classes.get(parentName);
+        //TODO找不到父类,报错
+        ClassSymbol current = symtab.classes.get(name);
+        current.AddParent(parent);
+        //TODO检查循环继承
+        checkCyclicInheritance(current);//检查循环继承,出错会报错
+      }
+    }
+
+    for (PClass c : f.l) {//声明属性,构造函数,方法
+      //收集成员
+      ClassSymbol sym = symtab.classes.get(c.name.id);
+      CreateMember(symtab,c,sym);
+    }
+    for (PClass c : f.l) {
+      //创建类符号
+      //TODO检查父类的成员变量是否重复
+      ClassSymbol sym = symtab.classes.get(c.name.id);
+      if (sym.parent != null) {
+        for(DeclSymbol d : sym.fields.values()){
+          if(sym.parent.lookupField(d.name)!=null){
+            //TODO报错 重复定义
+          }
+        }
+        // TODO是否有签名一样的重写方法
+        for(methodSymbol m : sym.methods.values()){
+          methodSymbol parentM=sym.parent.lookupMethod(m.name);
+          if(parentM!=null){
+            if(!parentM.parameters.equals(m)){
+              //TODO报错 参数不一致
+            }
+          }
+        }
+      }
+    }
+  }
+  static Constant TypeTranConsant(PType p){
+    if(p instanceof PTint P){
+      return new Cint(0);
+    } else if(p instanceof PTboolean){
+      return new Cbool(false);
+    }
+    //TODO报错 如何处理String类型的定义
+    return null;
+  }
+  static Constant typeCheck(PExpr expr, SymbolTable table) {
+    if (expr instanceof PEcst) {
+      // 常量类型检查
+      PEcst cst = (PEcst) expr;
+      return cst.c;
+    }
+
+    else if (expr instanceof PEbinop) {
+      // 二元运算类型检查
+      PEbinop binop = (PEbinop) expr;
+      Constant t1 = typeCheck(binop.e1, table);
+      Constant t2 = typeCheck(binop.e2, table);
+
+      switch (binop.op) {
+        case Badd: case Bsub: case Bmul: case Bdiv: case Bmod:
+          // 算术运算
+          if ((t1 instanceof Cint int1) &&
+                  t2 instanceof Cint int2) {
+            return new Cint(int1.i + int2.i);
+          }
+
+          //TODO报错,无效的操作数
+
+        case Blt: case Ble: case Bgt: case Bge:
+          // 比较运算
+          if ((t1 instanceof Cint int1) &&
+                  t2 instanceof Cint int2){
+            return new Cbool(true);
+          }
+            //TODO报错,无效的操作数
+
+        case Beq: case Bneq:
+          // 相等性比较
+          if (t1.getClass()==t2.getClass()) {
+            return new Cbool(true);
+          }
+          if ((t1 instanceof Cnull) || (t2 instanceof Cnull)) {
+            return  new Cbool(true);
+          }
+          //TODO 报错,无效的操作数
+        case Band: case Bor:
+          // 逻辑运算
+          if ((t1 instanceof Cbool) || (t2 instanceof Cbool)) {
+            return new Cbool(true);
+          }
+          //TODO报错,无效的操作数
+
+        case Badd_s:
+          // 字符串连接
+          if (((t1 instanceof Cstring T1) &&  (t2 instanceof Cint T2))
+          ) {
+            return new Cstring(T1.s+T2.i);
+          }
+          if (( (t2 instanceof Cstring T2) &&  (t1 instanceof Cint T1)))
+          {
+            return new Cstring(T2.s+T1.i);
+          }
+          //TODO报错,无效的操作数
+
+      }
+    }
+
+    else if (expr instanceof PEunop) {
+      PEunop unop = (PEunop) expr;
+      Constant t = typeCheck(unop.e, table);
+
+      switch (unop.op) {
+        case Uneg:  // -e
+          if (t instanceof Cint) {
+            return t;//TODO只是传回类型,不需要计算
+          }
+          //TODO报错,无效的操作数
+        case Unot:  // !e
+          if ( t instanceof Cbool) {
+            return t;
+          }
+          throw new Error("Logical NOT requires boolean operand");
+
+        case Upreinc:  // ++e
+        case Upostinc: // e++
+        case Upredec:  // --e
+        case Upostdec: // e--
+          // 自增自减操作符需要检查操作数是否可修改
+          if (!(unop.e instanceof PEident || unop.e instanceof PEdot)) {
+            //TODO不可修改
+          }
+          if (!(t instanceof Cint))  {
+            //TODO报错,无效的操作数 不能是非整数
+          }
+          return t;
+
+        case Ustring_of_int:  // 整数转字符串
+          if (t instanceof Cint T) {
+            return new Cstring(Long.toString(T.i));
+          }
+          //无效的操作数
+      }
+    }
+
+    else if (expr instanceof PEthis E) {
+      return new Cclass(null);//没有名字
+    }
+
+    else if (expr instanceof PEnull) {
+      return new Cnull();
+    }
+
+    else if (expr instanceof PEident) {
+      PEident ident = (PEident) expr;
+      Symbol_ sym = table.lookup(ident.id.id);
+      if (sym == null) {
+        //TODO没有找到对应的符号 应该不会发生在这里
+      }
+      if(sym instanceof ClassSymbol){
+        return new Cclass(sym.name);
+      }
+      if(sym instanceof DeclSymbol){
+        return TypeTranConsant(((DeclSymbol)sym).type);
+      }
+    }
+
+    else if (expr instanceof PEdot) {
+      PEdot dot = (PEdot) expr;
+      Constant objType = typeCheck(dot.e, table);
+      if (!(objType instanceof Cclass)) {
+        //TODO不是类无法引用成员
+      }
+      else{
+        ClassSymbol cls = table.classes.get(((Cclass)objType).name);
+        DeclSymbol field = cls.lookupField(dot.id.id);
+        if (field == null) {
+          //TODO没有找到对应的符号的成员
+        }
+        return TypeTranConsant(field.type);
+      }
+
+    }
+
+    else if (expr instanceof PEassignIdent) {
+      PEassignIdent assign = (PEassignIdent) expr;
+      Symbol_ sym = table.lookup(assign.id.id);
+      if (sym == null) {
+        //TODO没有找到对应的符号
+      }
+
+      Constant rightType = typeCheck(assign.e,table);
+      if(sym instanceof ClassSymbol S){
+        Constant t = new Cclass(S.name);
+        if (!isAssignable(rightType, t, table)) {
+         //类型不匹配
+        }
+        return t;
+      } else {
+          if (sym != null) {
+            Constant t = TypeTranConsant(((DeclSymbol)sym).type);
+            if (!isAssignable(rightType, t, table)) {
+              //类型不匹配
+            }
+            return rightType;
+          }
+      }
+    }
+
+    else if (expr instanceof PEassignDot) {
+      PEassignDot assign = (PEassignDot) expr;
+      Constant objType = typeCheck(assign.e1, table);
+      if (!(objType instanceof Cclass)) {
+        //TODO非类无法访问
+      }
+      ClassSymbol cls = table.classes.get(((Cclass)objType).name);
+      DeclSymbol field = cls.lookupField(assign.id.id);
+
+      if (field == null) {
+       //没有这个成员
+      }
+      Constant typeleft = TypeTranConsant(field.type);
+      Constant rightType = typeCheck(assign.e2, table);
+      if (!isAssignable(rightType, typeleft, table)) {
+        throw new Error("Type mismatch in field assignment");
+      }
+      return rightType;
+    }
+
+    else if (expr instanceof PEnew) {
+      PEnew newExpr = (PEnew) expr;
+      ClassSymbol cls = (ClassSymbol)table.lookup(newExpr.c.id);
+      if (cls == null) {
+        throw new Error("Class not found: " + newExpr.c.id);
+      }
+      // 检查构造函数参数
+      for (PExpr arg : newExpr.l) {
+        typeCheck(arg, table);
+        //todo检查参数类型是否一致
+      }
+      return new Cclass(cls.name) {
+      };
+    }
+
+    else if (expr instanceof PEcall) {
+      PEcall call = (PEcall) expr;
+      Constant objType = typeCheck(call.e, table);
+      if (!(objType instanceof Cclass)) {
+        //TODO非类无法调用
+      }
+      ClassSymbol cls = table.classes.get(((Cclass)objType).name);
+      methodSymbol method = cls.lookupMethod(call.id.id);
+      if (method == null) {
+        throw new Error("Method not found: " + call.id.id);
+      }
+      // 检查参数个数和类型
+      if (call.l.size() != method.parameters.size()) {
+        throw new Error("Wrong number of arguments");
+      }
+      for (int i = 0; i < call.l.size(); i++) {
+        Constant argType = typeCheck(call.l.get(i), table);
+        Constant paramType = TypeTranConsant(method.parameters.get(i).type);
+        if (!isAssignable(argType, paramType, table)) {
+          throw new Error("Type mismatch in argument " + (i+1));
+        }
+      }
+      return TypeTranConsant(method.returnType);
+    }
+
+    else if (expr instanceof PEcast) {
+      PEcast cast = (PEcast) expr;
+      Constant fromType = typeCheck(cast.e, table);
+      Constant toType = TypeTranConsant(cast.ty);//左
+      if(fromType instanceof Cclass && toType instanceof Cclass){
+        if (!isAssignable(toType, fromType, table)) {
+          throw new Error("Invalid cast");//TODO报错转换失败
+        }
+      }
+      else{
+        //TODO转换失败
+      }
+      return toType;
+    }
+
+    else if (expr instanceof PEinstanceof) {
+      PEinstanceof instanceof_ = (PEinstanceof) expr;
+      Constant objType = typeCheck(instanceof_.e, table);
+      Constant checkType = TypeTranConsant(instanceof_.ty);
+      if (!(objType instanceof Cclass) || !(checkType instanceof Cclass)) {
+        throw new Error("instanceof requires class types");
+        //TODO报错
+      }
+      return new Cbool((true));//转换只会失败或者成功
+    }
+
+    throw new Error("Unknown expression type");
+  } private static boolean isAssignable(Constant from, Constant to, SymbolTable table) {
+    if (from instanceof Cclass && to instanceof Cclass) {
+      //右边必须是左边的子类 form是右边, to是左边
+      ClassSymbol right = table.classes.get(((Cclass)from).name);
+      ClassSymbol left = table.classes.get(((Cclass)to).name);
+      if(right==null || left==null){
+        //TODO报错
+      }
+      else {
+        return right.isSubclass(left);
+      }
+    }
+    if (from.getClass() == to.getClass()) {
+      return true;
+    }
+    return false;
+  }
+
+
+    static void MemberCheck(SymbolTable symtab, ClassSymbol c) {
+      for(methodSymbol m : c.methods.values()) {
+        symtab.enterScope();
+        for(DeclSymbol d : m.parameters) {
+          symtab.define(d);
+        }
+          symtab.setCurrentMethod(m);
+          collectLocals(m.body,symtab);//检查变量是否被正确定义
+          symtab.exitScope();
+
+      }
+      //TODO 考虑构造函数
+    }
+
+  static TFile file(PFile f) {
+    SymbolTable symtab = new SymbolTable();
+    ClassCheck(symtab, f);
+    for (ClassSymbol c : symtab.classes.values()) {
+      symtab.enterScope();
+      symtab.setCurrentClass(c);
+      MemberCheck(symtab, c);
+      symtab.exitScope();
+    }
+
+
+    
+    error(null, "TODO");
+    return null;
+  }
+
+}

@@ -1,0 +1,149 @@
+// 基础类
+
+class Point {
+  int x;
+  int y;
+
+  // 构造函数
+  Point(int x, int y) {
+    this.x = x;
+    this.y = y;
+  }
+
+  // 返回int的方法
+  int getX() {
+    return x;
+  }
+
+  // void方法
+  void setY(int newY) {
+    y = newY;
+  }
+}
+
+// 继承示例
+class ColorPoint extends Point {
+  boolean isRed;
+
+  // 构造函数
+  ColorPoint(int x, int y, boolean red) {
+    //super(x, y);
+      // 注意：这里实际上会隐式调用 Point() 无参构造函数
+    this.x = x;
+    this.y = y;
+    isRed = red;
+  }
+
+  // 返回boolean的方法
+  boolean isRedPoint() {
+    return isRed;
+  }
+}
+
+// 展示各种语法的类
+class Calculator {
+  int value;
+
+  Calculator(int initial) {
+    value = initial;
+  }
+
+  // 展示算术运算符
+  int calculate(int x) {
+    int result;
+    result = x + value;  // 加法
+    result = result - 1; // 减法
+    result = result * 2; // 乘法
+    result = result / 2; // 除法
+    result = result % 5; // 取模
+    return result;
+  }
+
+  // 展示条件语句和布尔运算
+  boolean checkConditions(int x, int y) {
+    boolean result;
+
+    // if-else
+    if (x > y) {
+      result = true;
+    } else {
+      result = false;
+    }
+
+    // 布尔运算
+    result = result && (x >= 0);  // AND
+    result = result || (y <= 0);  // OR
+    result = !result;             // NOT
+
+    // 相等性测试
+    if (x == y) {
+      result = true;
+    }
+    if (x != y) {
+      result = false;
+    }
+
+    return result;
+  }
+
+  // 展示循环和块语句
+  void loopExample(int n) {
+    int i;
+    // for循环
+    for (i = 0; i < n; i = i + 1) {
+      // 块语句
+      {
+        int temp;
+        temp = i * 2;
+        value = value + temp;
+      }
+    }
+  }
+
+  // 展示null和instanceof
+  boolean testObject(Point p) {
+    if (p == null) {
+      return false;
+    }
+
+    if (p instanceof ColorPoint) {
+      return true;
+    }
+
+    return false;
+  }
+}
+
+// Main类
+class Main {
+  public static void main(String args[]) {
+    // 创建对象
+    Calculator calc;
+    calc = new Calculator(10);
+
+    // 调用方法
+    calc.loopExample(5);
+
+    // 创建和使用Point对象
+    Point p;
+    p = new Point(3, 4);
+
+    // 创建ColorPoint对象
+    ColorPoint cp;
+    cp = new ColorPoint(1, 2, true);
+
+    // 输出
+    System.out.print("Test complete!\n");
+
+    // 类型测试和转换
+    if (cp instanceof Point) {
+      Point converted;
+      converted = (Point)cp;
+    }
+
+    // 条件测试
+    if (calc.testObject(p) && calc.testObject(cp)) {
+      System.out.print("Objects are valid\n");
+    }
+  }
+}
